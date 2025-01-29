@@ -94,8 +94,8 @@ def train(model,epochs,batches,edge_index,split='train',k=5,device=None):
                 losses.append(batch_loss.item())
 
                 # Update progress bar with current batch loss
-                pbar.set_postfix(batch_loss=f"{batch_loss.item():.4f}")
+                pbar.set_postfix(batch_loss=f"{batch_loss.item():.9f}")
 
-        print(f"Epoch {epoch_idx + 1} Loss: {epoch_loss:.4f}")
+        print(f"Epoch {epoch_idx + 1} Loss: {epoch_loss:.9f}")
 
     return losses
