@@ -6,30 +6,45 @@ from collections import defaultdict
 from itertools import count
 
 #Path
-raw_file_path = "reviews.json"
+raw_file_path = "src/data/raw/reviews.json"
 processed_file_path = ["data_train.pt","data_test.pt","data_val.pt"]
 
 def process_data(raw_file_path=raw_file_path):
     # Check first if the data is already there
-    with open(raw_file_path,'r') as file:
+    with open(raw_file_path, 'r') as file:
         reviews = json.load(file)
-
-    COO_format = [[], []]  # Rows, Columns, Data
-
-    # Use defaultdict with itertools.count to auto-increment indices
-    node_mapping = defaultdict(count().__next__)
-
+    
+    COO_format = [[], []]  # Rows, Columns
+    
+    # First pass: map all users
+    user_counter = count().__next__
+    node_mapping = defaultdict(user_counter)
+    
+    # Get all unique user IDs first
+    user_ids = {review['user_id'] for review in reviews}
+    for user_id in user_ids:
+        node_mapping[user_id]  # This will assign indices 0, 1, 2... to users
+    
+    # Get the next available index after all users
+    business_start_idx = len(user_ids)
+    
+    # Second pass: map businesses starting from business_start_idx
+    business_counter = count(business_start_idx).__next__
+    business_mapping = defaultdict(business_counter)
+    
+    # Process reviews and create edge index
     for review in reviews:
         user_id = review['user_id']
-        item_id = review['business_id']
+        business_id = review['business_id']
+        
         if review['stars'] >= 3:
-
-            # Append to COO_format
-            COO_format[0].append(node_mapping[user_id])  # Row index (user)
-            COO_format[1].append(node_mapping[item_id])  # Column index (item)
-
+            # User indices will be 0 to len(users)-1
+            # Business indices will start from len(users)
+            COO_format[0].append(node_mapping[user_id])
+            COO_format[1].append(business_mapping[business_id])
+    
     edge_index = torch.tensor(COO_format, dtype=torch.long)
-
+    
     return edge_index
 
 def split_data(edge_index,train_size=0.7,test_size=0.1):
@@ -74,6 +89,7 @@ def get_data(load_path=None):
 
     #Check if the processed data already exists and create it if not
     elif not all([os.path.exists(os.path.join('src/data/processed',path)) for path in processed_file_path]):
+
         edge_index = process_data(raw_file_path=raw_file_path)
         edge_index_train,edge_index_test,edge_index_val = split_data(edge_index=edge_index)
 
