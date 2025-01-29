@@ -7,7 +7,10 @@ from torch.optim import Adam
 BATCH_SIZE = 1024
 
 # Function to compute batch loss
-def compute_batch_loss(E,batch,edge_index, k=5):
+import torch
+import torch.nn.functional as F
+
+def compute_batch_loss(E, batch, edge_index, k=5):
     batch_neighbors = []
     batch_neg_samples = []
 
@@ -42,8 +45,8 @@ def compute_batch_loss(E,batch,edge_index, k=5):
     similarities = torch.bmm(neighbor_embeds, neg_sample_embeds.transpose(1, 2))
     log_probs = F.log_softmax(similarities, dim=-1)
 
-    # Compute loss
-    batch_loss = log_probs[valid_mask].sum()
+    # Compute loss (normalized by the number of valid entries)
+    batch_loss = -log_probs[valid_mask].mean()
 
     return batch_loss
 
