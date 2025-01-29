@@ -63,9 +63,17 @@ def make_contiguous(ids):
 
     return reindexed_ids
 
-def get_data():
+def get_data(load_path=None):
+
+    #Directly load the data if the path is provided
+    if load_path:
+        #load data if it already exists
+        edge_index_train = torch.load(os.path.join(load_path,'data_train.pt'))
+        edge_index_test = torch.load(os.path.join(load_path,'data_test.pt'))
+        edge_index_val = torch.load(os.path.join(load_path,'data_val.pt'))
+
     #Check if the processed data already exists and create it if not
-    if not all([os.path.exists(os.path.join('src/data/processed',path)) for path in processed_file_path]):
+    elif not all([os.path.exists(os.path.join('src/data/processed',path)) for path in processed_file_path]):
         edge_index = process_data(raw_file_path=raw_file_path)
         edge_index_train,edge_index_test,edge_index_val = split_data(edge_index=edge_index)
 
