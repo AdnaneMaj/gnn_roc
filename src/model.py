@@ -11,6 +11,8 @@ class LightGCN(nn.Module):
         # Initial embeddings
         self.E0 = nn.Embedding(self.users_index.size(0)+self.items_index.size(0), embedding_dim)
 
+        nn.init.xavier_uniform_(self.E0.weight)
+
         # LG Convolution layers
         self.convs = nn.ModuleList([
             LGConv() for _ in range(num_layers)
