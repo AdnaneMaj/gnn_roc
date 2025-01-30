@@ -6,64 +6,84 @@ from torch.optim import Adam
 #Configuration
 BATCH_SIZE = 1024
 
-# Function to compute batch loss
-import torch
-import torch.nn.functional as F
+def compute_bpr_loss(E, batch, edge_index, k=1):
+    """
+    Compute the BPR loss for a batch of users.
 
-def compute_batch_loss(E, batch, edge_index, k=5):
-    batch_neighbors = []
-    batch_neg_samples = []
+    Args:
+        E (torch.Tensor): Embedding matrix of shape (n_users + n_items, embedding_dim).
+        batch (torch.Tensor): Batch of user indices of shape (batch_size,).
+        edge_index (torch.Tensor): Edge index in COO format of shape (2, N).
+        k (int): Number of negative samples per positive pair.
+
+    Returns:
+        torch.Tensor: BPR loss for the batch.
+    """
+    batch_loss = 0.0
 
     for u in batch:
-        # Find neighbors
+        # Find positive items (items interacted with by user u)
         mask = edge_index[0] == u
-        N_u = edge_index[1, mask]
+        pos_items = edge_index[1, mask]
 
-        # Find non-neighbors and sample negatives
+        # Sample one positive item per user
+        if len(pos_items) == 0:
+            continue  # Skip users with no positive interactions
+        pos_item = pos_items[torch.randint(0, len(pos_items), (1,))]
+
+        # Find negative items (items not interacted with by user u)
         non_neighbors_mask = ~mask
-        non_neighbors = edge_index[1, non_neighbors_mask]
-        neg_samples = non_neighbors[torch.randint(0, len(non_neighbors), (k,))]
+        neg_items = edge_index[1, non_neighbors_mask]
 
-        batch_neighbors.append(N_u)
-        batch_neg_samples.append(neg_samples)
+        # Sample k negative items
+        neg_items = neg_items[torch.randint(0, len(neg_items), (k,))]
 
-    # Pad neighbors to the same length
-    max_neighbors = max(len(n) for n in batch_neighbors)
-    padded_neighbors = torch.stack([
-        F.pad(n, (0, max_neighbors - len(n)), value=-1)
-        for n in batch_neighbors
-    ])
+        # Compute scores for positive and negative items
+        u_embedding = E[u]  # User embedding
+        pos_embedding = E[pos_item]  # Positive item embedding
+        neg_embeddings = E[neg_items]  # Negative item embeddings
 
-    # Valid mask for padded neighbors
-    valid_mask = padded_neighbors != -1
+        # Compute predicted scores
+        pos_score = torch.sum(u_embedding * pos_embedding, dim=-1)  # Dot product
+        neg_scores = torch.sum(u_embedding.unsqueeze(0) * neg_embeddings, dim=-1)  # Dot product
 
-    # Compute embeddings
-    neighbor_embeds = E[padded_neighbors]  # Assuming E is predefined
-    neg_sample_embeds = torch.stack([E[neg] for neg in batch_neg_samples])
+        # Compute BPR loss for this user
+        for neg_score in neg_scores:
+            bpr_loss = -F.logsigmoid(pos_score - neg_score)
+            batch_loss += bpr_loss
 
-    # Compute similarities and log probabilities
-    similarities = torch.bmm(neighbor_embeds, neg_sample_embeds.transpose(1, 2))
-    log_probs = F.log_softmax(similarities, dim=-1)
-
-    # Compute loss (normalized by the number of valid entries)
-    batch_loss = -log_probs[valid_mask].mean()
+    # Normalize by the number of users and negative samples
+    batch_loss = batch_loss / (len(batch) * k)
 
     return batch_loss
 
 
-def train_step(model,optimizer,edge_index,batch,k):
+def train_step(model, optimizer, edge_index, batch, k=1):
+    """
+    Perform a training step with BPR loss.
 
-        E0, E = model.forward(x=None, edge_index=edge_index)
+    Args:
+        model: The LightGCN model.
+        optimizer: The optimizer.
+        edge_index (torch.Tensor): Edge index in COO format of shape (2, N).
+        batch (torch.Tensor): Batch of user indices of shape (batch_size,).
+        k (int): Number of negative samples per positive pair.
 
-        # Compute batch loss
-        batch_loss = compute_batch_loss(batch=batch, E=E,edge_index=edge_index,k=k)
+    Returns:
+        torch.Tensor: BPR loss for the batch.
+    """
+    # Forward pass: compute embeddings
+    E0, E = model.forward(x=None, edge_index=edge_index)
 
-        # Backpropagation and optimization
-        optimizer.zero_grad()
-        batch_loss.backward()
-        optimizer.step()
+    # Compute BPR loss
+    batch_loss = compute_bpr_loss(E=E, batch=batch, edge_index=edge_index, k=k)
 
-        return batch_loss
+    # Backpropagation and optimization
+    optimizer.zero_grad()
+    batch_loss.backward()
+    optimizer.step()
+
+    return batch_loss
 
 def train(model,epochs,batches,edge_index,split='train',k=5,device=None):
 
