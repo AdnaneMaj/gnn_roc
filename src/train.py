@@ -87,7 +87,7 @@ def train_step(model, optimizer, edge_index, batch, k=1):
 
     return batch_loss
 
-def train(model, epochs, batches, edge_index, split='train', k=5, device=None, checkpoint_dir='checkpoints', checkpoint_freq=1):
+def train(model, epochs, batches, edge_index, split='train', k=5, device=None, checkpoint_dir='checkpoints', checkpoint_freq=1,lr=0.0001):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if not device else torch.device(device)
 
@@ -95,7 +95,7 @@ def train(model, epochs, batches, edge_index, split='train', k=5, device=None, c
     model = model.to(device)
     edge_index = edge_index[split].to(device)
 
-    optimizer = Adam(params=model.E0.parameters(), lr=0.0001)
+    optimizer = Adam(params=model.E0.parameters(), lr=lr)
 
     losses = []
 
