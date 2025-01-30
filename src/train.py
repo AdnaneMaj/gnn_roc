@@ -1,4 +1,6 @@
 from tqdm import tqdm
+import os
+
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
@@ -85,17 +87,20 @@ def train_step(model, optimizer, edge_index, batch, k=1):
 
     return batch_loss
 
-def train(model,epochs,batches,edge_index,split='train',k=5,device=None):
+def train(model, epochs, batches, edge_index, split='train', k=5, device=None, checkpoint_dir='checkpoints', checkpoint_freq=1):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if not device else torch.device(device)
 
-    #Move the model and the data to device
+    # Move the model and the data to device
     model = model.to(device)
     edge_index = edge_index[split].to(device)
 
-    optimizer = Adam(params=model.E0.parameters(),lr=0.0001)
+    optimizer = Adam(params=model.E0.parameters(), lr=0.0001)
 
     losses = []
+
+    # Create checkpoint directory if it doesn't exist
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     for epoch_idx in range(epochs):
 
@@ -107,7 +112,7 @@ def train(model,epochs,batches,edge_index,split='train',k=5,device=None):
         with tqdm(batches, desc=f"Epoch {epoch_idx + 1}", unit="batch") as pbar:
             for batch in pbar:
                 
-                batch_loss = train_step(model=model,optimizer=optimizer,edge_index=edge_index,batch=batch,k=k)
+                batch_loss = train_step(model=model, optimizer=optimizer, edge_index=edge_index, batch=batch, k=k)
 
                 # Accumulate epoch loss
                 epoch_loss += batch_loss.item()
@@ -117,5 +122,16 @@ def train(model,epochs,batches,edge_index,split='train',k=5,device=None):
                 pbar.set_postfix(batch_loss=f"{batch_loss.item():.9f}")
 
         print(f"Epoch {epoch_idx + 1} Loss: {epoch_loss:.9f}")
+
+        # Save checkpoint at the end of each epoch or at the specified frequency
+        if (epoch_idx + 1) % checkpoint_freq == 0:
+            checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_epoch_{epoch_idx + 1}.pt')
+            torch.save({
+                'epoch': epoch_idx + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': epoch_loss,
+            }, checkpoint_path)
+            print(f"Checkpoint saved at {checkpoint_path}")
 
     return losses
