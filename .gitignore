@@ -1,3 +1,4 @@
 src/data
 *.ipynb
 __pycache__
+GNN_losses

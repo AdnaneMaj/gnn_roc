@@ -135,3 +135,58 @@ def train(model, epochs, batches, edge_index, split='train', k=5, device=None, c
             print(f"Checkpoint saved at {checkpoint_path}")
 
     return losses
+
+def resume_training(model, epochs, batches, edge_index, split='train', k=5, 
+                    device=None, checkpoint_dir='checkpoints', checkpoint_freq=1, lr=0.0001):
+    # Find the latest checkpoint
+    checkpoints = [f for f in os.listdir(checkpoint_dir) if f.startswith('checkpoint_epoch_') and f.endswith('.pt')]
+    
+    if not checkpoints:
+        print("No checkpoints found. Starting training from scratch.")
+        return train(model, epochs, batches, edge_index, split, k, device, checkpoint_dir, checkpoint_freq, lr)
+    
+    # Sort checkpoints to find the latest one
+    latest_checkpoint = max(checkpoints, key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    latest_checkpoint_path = os.path.join(checkpoint_dir, latest_checkpoint)
+    
+    try:
+        # Load the checkpoint
+        checkpoint = torch.load(latest_checkpoint_path)
+        
+        # Extract the epoch number from the checkpoint filename
+        start_epoch = int(latest_checkpoint.split('_')[-1].split('.')[0])
+        
+        # Load model state
+        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        print(f"Resuming training from checkpoint: {latest_checkpoint}")
+        print(f"Starting from epoch {start_epoch}")
+        
+        # Adjust epochs for remaining training
+        remaining_epochs = epochs - start_epoch
+        
+        # Prepare device and edge_index
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if not device else torch.device(device)
+        model = model.to(device)
+        edge_index = edge_index[split].to(device)
+        
+        # Continue training from the last checkpoint
+        losses = train(
+            model=model, 
+            epochs=remaining_epochs, 
+            batches=batches, 
+            edge_index={'train': edge_index}, 
+            split=split, 
+            k=k, 
+            device=device, 
+            checkpoint_dir=checkpoint_dir, 
+            checkpoint_freq=checkpoint_freq, 
+            lr=lr
+        )
+        
+        return losses
+    
+    except Exception as e:
+        print(f"Error loading checkpoint {latest_checkpoint}: {e}")
+        print("Starting training from scratch.")
+        return train(model, epochs, batches, edge_index, split, k, device, checkpoint_dir, checkpoint_freq, lr)
