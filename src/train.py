@@ -148,10 +148,13 @@ def resume_training(model, epochs, batches, edge_index, split='train', k=5,
     # Sort checkpoints to find the latest one
     latest_checkpoint = max(checkpoints, key=lambda x: int(x.split('_')[-1].split('.')[0]))
     latest_checkpoint_path = os.path.join(checkpoint_dir, latest_checkpoint)
+
+    # Prepare device and edge_index
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if not device else torch.device(device)
     
     try:
         # Load the checkpoint
-        checkpoint = torch.load(latest_checkpoint_path)
+        checkpoint = torch.load(latest_checkpoint_path,map_location=device)
         
         # Extract the epoch number from the checkpoint filename
         start_epoch = int(latest_checkpoint.split('_')[-1].split('.')[0])
@@ -165,8 +168,6 @@ def resume_training(model, epochs, batches, edge_index, split='train', k=5,
         # Adjust epochs for remaining training
         remaining_epochs = epochs - start_epoch
         
-        # Prepare device and edge_index
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if not device else torch.device(device)
         model = model.to(device)
         edge_index = edge_index[split].to(device)
         
